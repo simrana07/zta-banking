@@ -85,6 +85,11 @@ from orbit.scenarios.agentharm.scorer import agentharm_scorer  # noqa: F401
 
 # --- ConVerse (no external dependencies) ---
 from orbit.scenarios.customer_service.converse.task import converse_safety  # noqa: F401
+
+# Banking ZTA scenario
+from orbit.scenarios.banking.task import banking_zta  # noqa: F401
+from orbit.scenarios.banking.scorer import banking_zta_scorer  # noqa: F401
+
 from orbit.scenarios.customer_service.converse.scorer import converse_scorer  # noqa: F401
 
 # --- SWE-Bench (optional: requires swebench + docker) ---

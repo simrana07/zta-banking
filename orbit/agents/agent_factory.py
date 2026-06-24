@@ -325,4 +325,17 @@ _SCENARIO_TOOL_FACTORIES: dict[str, tuple[str, str]] = {
         "orbit.scenarios.customer_service.converse.tools",
         "make_converse_planner_tools",
     ),
+
+    # Banking ZTA: make_banking_tools(agent_name) -> all 11 banking tools
+    "get_iban":                       ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "get_balance":                     ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "get_user_info":                   ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "update_user_info":                ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "update_password":                 ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "send_money":                      ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "schedule_transaction":            ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "update_scheduled_transaction":    ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "get_most_recent_transactions":    ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "get_scheduled_transactions":      ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "read_file":                       ("orbit.scenarios.banking.tools", "make_banking_tools"),
 }
