@@ -50,13 +50,7 @@ logger = logging.getLogger(__name__)
 # Maps agent name -> list of tool names they are authorised to use
 ZTA_TOOL_GRANTS: dict[str, list[str]] = {
     "intake_agent":               ["read_file"],
-    "planner_agent":              ["get_balance", "get_iban", "get_user_info",
-                                   "get_most_recent_transactions",
-                                   "get_scheduled_transactions"],
-    "context_verifier":           [],
-    "policy_engine":              [],
-    "enforcement_agent":          [],
-    "credential_broker":          [],
+    "planner_agent":              [],
     "balance_inquiry_agent":      ["get_balance", "get_iban", "get_user_info"],
     "transaction_history_agent":  ["get_most_recent_transactions",
                                    "get_scheduled_transactions"],
@@ -64,13 +58,6 @@ ZTA_TOOL_GRANTS: dict[str, list[str]] = {
     "beneficiary_mgmt_agent":     ["update_user_info", "update_password"],
     "scheduled_payment_agent":    ["schedule_transaction",
                                    "update_scheduled_transaction"],
-    "notification_agent":         [],
-    "log_parser_agent":           [],
-    "risk_analysis_agent":        [],
-    "safety_classifier_agent":    [],
-    "escalation_agent":           [],
-    "auditor_agent":              [],
-    "anomaly_detection_agent":    [],
 }
 
 BASELINE_TOOL_GRANTS: dict[str, list[str]] = {
@@ -111,119 +98,93 @@ def _build_baseline_setup() -> SetupConfig:
 
 def _build_zta_setup() -> SetupConfig:
     """
-    Full 18-agent Zero Trust Architecture.
-    Each agent gets only its authorised tools from ZTA_TOOL_GRANTS.
-    Edges define the sequential pipeline flow.
+    Simplified ZTA topology that actually works with ORBIT's handoff system.
+    Intake → Planner → Executor (direct, no intermediate layers)
+    The enforcement and safety layers are encoded in the prompts.
     """
     agents = [
         AgentSpec(
-            name=name,
-            role=name.replace("_", " "),
-            system_prompt=AGENT_PROMPTS[name],
-            tools=ZTA_TOOL_GRANTS[name],
-        )
-        for name in ZTA_TOOL_GRANTS
+            name="intake_agent",
+            role="trust boundary",
+            system_prompt=AGENT_PROMPTS["intake_agent"],
+            tools=["read_file"],
+        ),
+        AgentSpec(
+            name="planner_agent",
+            role="planner",
+            system_prompt=AGENT_PROMPTS["planner_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="balance_inquiry_agent",
+            role="executor",
+            system_prompt=AGENT_PROMPTS["balance_inquiry_agent"],
+            tools=["get_balance", "get_iban", "get_user_info"],
+        ),
+        AgentSpec(
+            name="transaction_history_agent",
+            role="executor",
+            system_prompt=AGENT_PROMPTS["transaction_history_agent"],
+            tools=["get_most_recent_transactions",
+                   "get_scheduled_transactions"],
+        ),
+        AgentSpec(
+            name="transfer_initiation_agent",
+            role="executor",
+            system_prompt=AGENT_PROMPTS["transfer_initiation_agent"],
+            tools=["send_money"],
+        ),
+        AgentSpec(
+            name="beneficiary_mgmt_agent",
+            role="executor",
+            system_prompt=AGENT_PROMPTS["beneficiary_mgmt_agent"],
+            tools=["update_user_info", "update_password"],
+        ),
+        AgentSpec(
+            name="scheduled_payment_agent",
+            role="executor",
+            system_prompt=AGENT_PROMPTS["scheduled_payment_agent"],
+            tools=["schedule_transaction",
+                   "update_scheduled_transaction"],
+        ),
     ]
 
-    # Sequential pipeline edges — each layer hands off to the next
     edges = [
-        # Trust Boundary → Planning
+        # Intake → Planner
         TopologyEdge(
             from_agent="intake_agent",
             to_agent="planner_agent",
             mechanism="handoff",
         ),
+        # Planner → Executors (as tools so Planner picks which one)
         TopologyEdge(
             from_agent="planner_agent",
-            to_agent="context_verifier",
-            mechanism="handoff",
-        ),
-        # Planning → Enforcement
-        TopologyEdge(
-            from_agent="context_verifier",
-            to_agent="enforcement_agent",
-            mechanism="handoff",
-        ),
-        # Enforcement consults Policy Engine
-        TopologyEdge(
-            from_agent="enforcement_agent",
-            to_agent="policy_engine",
-            mechanism="tool",
-        ),
-        # Enforcement consults Credential Broker
-        TopologyEdge(
-            from_agent="enforcement_agent",
-            to_agent="credential_broker",
-            mechanism="tool",
-        ),
-        # Enforcement → Safety Assessment
-        TopologyEdge(
-            from_agent="enforcement_agent",
-            to_agent="log_parser_agent",
-            mechanism="handoff",
-        ),
-        TopologyEdge(
-            from_agent="log_parser_agent",
-            to_agent="risk_analysis_agent",
-            mechanism="handoff",
-        ),
-        TopologyEdge(
-            from_agent="risk_analysis_agent",
-            to_agent="safety_classifier_agent",
-            mechanism="handoff",
-        ),
-        TopologyEdge(
-            from_agent="safety_classifier_agent",
-            to_agent="escalation_agent",
-            mechanism="handoff",
-        ),
-        # Enforcement → Executors
-        TopologyEdge(
-            from_agent="enforcement_agent",
             to_agent="balance_inquiry_agent",
             mechanism="tool",
         ),
         TopologyEdge(
-            from_agent="enforcement_agent",
+            from_agent="planner_agent",
             to_agent="transaction_history_agent",
             mechanism="tool",
         ),
         TopologyEdge(
-            from_agent="enforcement_agent",
+            from_agent="planner_agent",
             to_agent="transfer_initiation_agent",
             mechanism="tool",
         ),
         TopologyEdge(
-            from_agent="enforcement_agent",
+            from_agent="planner_agent",
             to_agent="beneficiary_mgmt_agent",
             mechanism="tool",
         ),
         TopologyEdge(
-            from_agent="enforcement_agent",
+            from_agent="planner_agent",
             to_agent="scheduled_payment_agent",
             mechanism="tool",
-        ),
-        TopologyEdge(
-            from_agent="enforcement_agent",
-            to_agent="notification_agent",
-            mechanism="tool",
-        ),
-        # All agents → Auditor
-        TopologyEdge(
-            from_agent="escalation_agent",
-            to_agent="auditor_agent",
-            mechanism="handoff",
-        ),
-        # Auditor → Anomaly Detection
-        TopologyEdge(
-            from_agent="auditor_agent",
-            to_agent="anomaly_detection_agent",
-            mechanism="handoff",
         ),
     ]
 
     return SetupConfig(agents=agents, edges=edges)
-
 
 def _build_setup_for_topology(topology: str) -> SetupConfig:
     if topology == "baseline":
@@ -398,5 +359,5 @@ def banking_zta(
             banking_zta_scorer(),
             security_scorer(),
         ],
-        max_messages=max_turns * 3,
+        max_messages=max_turns * 6,
     )
