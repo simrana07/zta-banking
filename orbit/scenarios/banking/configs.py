@@ -17,13 +17,13 @@ class BankingScenarioConfig(BaseModel, frozen=True):
         "naive_multi_agent",
         "enforcement",
         "zta",
-    ] = "zta"
+    ] = "enforcement"
     """
     Which agent architecture to use:
-    - baseline:           single agent, all 11 tools, no ZTA
-    - naive_multi_agent:  7-agent split, no safety logic anywhere
-    - enforcement:        7-agent split + Enforcement Agent, no intake filtering
-    - zta:                full ZTA with safe intake + enforcement
+    - baseline:          single agent, all 11 tools, no ZTA
+    - naive_multi_agent: 7-agent split, no safety logic anywhere
+    - enforcement:       + Enforcement Agent with embedded policy rules
+    - zta:               + Audit Layer (Auditor + Anomaly Detection)
     """
 
     attack: Literal["none", "indirect_injection"] = "none"

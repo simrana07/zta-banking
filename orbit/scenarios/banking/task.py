@@ -3,12 +3,12 @@ Banking ZTA task entry point.
 
 Three experimental conditions:
   topology=naive_multi_agent  — no safety, attacks succeed
-  topology=enforcement        — enforcement agent only, no intake filtering
-  topology=zta                — full ZTA (add safe intake prompt to run this)
+  topology=enforcement        — enforcement agent with policy rules
+  topology=zta                — enforcement + audit layer
 
 Run with:
     inspect eval orbit/scenarios/banking/task.py::banking_zta \
-        -T topology=enforcement \
+        -T topology=zta \
         -T attack=indirect_injection \
         --model openai/gpt-4o-mini
 """
@@ -61,6 +61,8 @@ AGENT_TOOL_GRANTS: dict[str, list[str]] = {
     "beneficiary_mgmt_agent":     ["update_user_info", "update_password"],
     "scheduled_payment_agent":    ["schedule_transaction",
                                    "update_scheduled_transaction"],
+    "auditor_agent":              [],
+    "anomaly_detection_agent":    [],
 }
 
 
@@ -153,7 +155,7 @@ def _build_baseline_setup() -> SetupConfig:
 def _build_naive_setup() -> SetupConfig:
     """
     Stage 1: Naive multi-agent.
-    Same 7-agent decomposition but zero safety logic in any prompt.
+    Same agent decomposition but zero safety logic in any prompt.
     Planner routes directly to executors — no enforcement gate.
     Expected: high ASR, attacks succeed.
     """
@@ -207,9 +209,8 @@ def _build_enforcement_setup() -> SetupConfig:
     """
     Stage 2: Naive multi-agent + Enforcement Agent.
     No safety logic in Intake Agent prompt.
-    Enforcement Agent sits between Planner and Executors.
-    Has policy rules embedded — catches injection at enforcement layer.
-    Expected: lower ASR than naive, attacks caught by enforcement.
+    Enforcement Agent sits between Planner and Executors with policy rules.
+    Expected: lower ASR than naive.
     """
     agents = [
         AgentSpec(
@@ -234,19 +235,16 @@ def _build_enforcement_setup() -> SetupConfig:
     ]
 
     edges = [
-        # Intake → Planner
         TopologyEdge(
             from_agent="intake_agent",
             to_agent="planner_agent",
             mechanism="handoff",
         ),
-        # Planner → Enforcement (handoff so full context passes through)
         TopologyEdge(
             from_agent="planner_agent",
             to_agent="enforcement_agent",
             mechanism="handoff",
         ),
-        # Enforcement → Executors (as tools so it picks which one)
         *_make_executor_edges("enforcement_agent"),
     ]
 
@@ -255,11 +253,76 @@ def _build_enforcement_setup() -> SetupConfig:
 
 def _build_zta_setup() -> SetupConfig:
     """
-    Stage 3: Full ZTA.
-    Safe Intake Agent + Enforcement Agent.
-    To activate: restore safe intake prompt in prompts.py.
+    Stage 3: Enforcement + Audit Layer.
+    Adds Auditor Agent and Anomaly Detection Agent after enforcement.
+    The Enforcement Agent hands off to the Auditor after every decision.
+    The Auditor passes to Anomaly Detection which flags suspicious patterns.
+    Expected: same ASR as enforcement, but with full audit trail.
     """
-    return _build_enforcement_setup()
+    agents = [
+        AgentSpec(
+            name="intake_agent",
+            role="trust boundary",
+            system_prompt=AGENT_PROMPTS["intake_agent"],
+            tools=AGENT_TOOL_GRANTS["intake_agent"],
+        ),
+        AgentSpec(
+            name="planner_agent",
+            role="planner",
+            system_prompt=AGENT_PROMPTS["planner_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="enforcement_agent",
+            role="enforcement",
+            system_prompt=AGENT_PROMPTS["enforcement_agent"],
+            tools=[],
+        ),
+        *_make_executor_agents(),
+        AgentSpec(
+            name="auditor_agent",
+            role="audit",
+            system_prompt=AGENT_PROMPTS["auditor_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="anomaly_detection_agent",
+            role="audit",
+            system_prompt=AGENT_PROMPTS["anomaly_detection_agent"],
+            tools=[],
+        ),
+    ]
+
+    edges = [
+        # Intake → Planner
+        TopologyEdge(
+            from_agent="intake_agent",
+            to_agent="planner_agent",
+            mechanism="handoff",
+        ),
+        # Planner → Enforcement
+        TopologyEdge(
+            from_agent="planner_agent",
+            to_agent="enforcement_agent",
+            mechanism="handoff",
+        ),
+        # Enforcement → Executors
+        *_make_executor_edges("enforcement_agent"),
+        # Enforcement → Auditor
+        TopologyEdge(
+            from_agent="enforcement_agent",
+            to_agent="auditor_agent",
+            mechanism="handoff",
+        ),
+        # Auditor → Anomaly Detection
+        TopologyEdge(
+            from_agent="auditor_agent",
+            to_agent="anomaly_detection_agent",
+            mechanism="handoff",
+        ),
+    ]
+
+    return SetupConfig(agents=agents, edges=edges)
 
 
 def _build_setup_for_topology(topology: str) -> SetupConfig:
@@ -334,7 +397,6 @@ def _build_experiment_config(
     attacks = []
     if banking_task.category == "attack":
 
-        # Select payload based on attack variant
         variant = getattr(banking_task, "attack_variant", "naive")
 
         if variant == "naive":
