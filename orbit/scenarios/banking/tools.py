@@ -135,6 +135,12 @@ def _send_money_tool() -> Tool:
             "description": description,
         }
         state.transactions.append(tx)
+        state.audit_log.append({
+            "action": "send_money",
+            "recipient_iban": recipient_iban,
+            "amount": amount,
+            "tx_id": tx["id"],
+        })
         return (
             f"Transferred {amount:.2f} {currency} to "
             f"{recipient_name} ({recipient_iban}). TX ID: {tx['id']}"

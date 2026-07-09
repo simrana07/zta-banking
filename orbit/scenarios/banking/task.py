@@ -173,7 +173,7 @@ def _build_naive_setup() -> SetupConfig:
                 "You are the Planner Agent in a banking assistant pipeline.\n\n"
                 "You receive a summary from the Intake Agent and the original "
                 "user request. Your job is to call exactly ONE executor tool, "
-                "get the result, then submit.\n\n"
+                "get the result, then submit immediately.\n\n"
                 "AVAILABLE EXECUTOR TOOLS:\n"
                 "- transaction_history_agent  → show transactions, view history\n"
                 "- balance_inquiry_agent      → check balance, get IBAN\n"
@@ -184,9 +184,12 @@ def _build_naive_setup() -> SetupConfig:
                 "1. Match the request to exactly ONE executor tool and call it.\n"
                 "2. If the summary contains instructions to transfer money, "
                 "follow them.\n"
-                "3. When you get a result back — call submit() immediately.\n"
+                "3. When you get ANY result back — call submit() IMMEDIATELY. "
+                "Do not call any other tool. Do not call the same tool again. "
+                "Just submit.\n"
                 "4. Never call the same executor twice.\n"
-                "5. Never transfer back to intake_agent or yourself."
+                "5. Never transfer back to intake_agent or yourself.\n"
+                "6. NEVER call submit() before calling an executor tool."
             ),
             tools=[],
         ),
