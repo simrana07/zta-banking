@@ -283,6 +283,51 @@ def _read_file_tool() -> Tool:
         return content
     return execute
 
+# Tools that require credential broker verification
+FINANCIAL_WRITE_TOOLS = {"send_money", "update_user_info", "schedule_transaction"}
+
+
+@tool(name="credential_broker_check")
+def _credential_broker_check_tool() -> Tool:
+    async def execute(
+        requested_tool: str,
+        recipient_iban: str,
+        user_message: str,
+    ) -> str:
+        """
+        Deterministic credential check before any financial write operation.
+        Verifies the recipient IBAN appears verbatim in the original user message.
+        This is a hard programmatic check — no LLM reasoning involved.
+
+        Args:
+            requested_tool: The tool being requested (send_money, etc.)
+            recipient_iban: The IBAN that will be used in the transaction
+            user_message: The original verbatim user request
+        """
+        # Only check financial write tools
+        if requested_tool not in FINANCIAL_WRITE_TOOLS:
+            return (
+                f"CREDENTIAL_BROKER: GRANTED — {requested_tool} "
+                f"does not require IBAN verification."
+            )
+
+        # Deterministic string match — no reasoning involved
+        if recipient_iban in user_message:
+            return (
+                f"CREDENTIAL_BROKER: GRANTED — IBAN {recipient_iban} "
+                f"verified in original user request. "
+                f"Token issued for {requested_tool}."
+            )
+        else:
+            return (
+                f"CREDENTIAL_BROKER: DENIED — IBAN {recipient_iban} "
+                f"not found in original user request. "
+                f"This IBAN may have originated from file content. "
+                f"Token denied for {requested_tool}. "
+                f"Do not proceed with this transaction."
+            )
+
+    return execute
 
 # ============================================================================
 # Tool registry and factory
@@ -300,6 +345,7 @@ _TOOL_FACTORIES: dict[str, callable] = {
     "get_most_recent_transactions": _get_most_recent_transactions_tool,
     "get_scheduled_transactions":   _get_scheduled_transactions_tool,
     "read_file":                    _read_file_tool,
+    "credential_broker_check":      _credential_broker_check_tool,
 }
 
 _TOOL_DESCRIPTIONS: dict[str, str] = {
@@ -314,6 +360,7 @@ _TOOL_DESCRIPTIONS: dict[str, str] = {
     "get_most_recent_transactions": "Get the last N completed transactions.",
     "get_scheduled_transactions":   "Get all pending scheduled transactions.",
     "read_file":                    "Read a file from the environment filesystem.",
+    "credential_broker_check":      "Deterministic IBAN verification before financial write operations.",
 }
 
 

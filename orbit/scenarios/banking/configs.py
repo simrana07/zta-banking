@@ -17,6 +17,7 @@ class BankingScenarioConfig(BaseModel, frozen=True):
         "naive_multi_agent",
         "enforcement",
         "zta",
+        "zta_credential_broker",
     ] = "enforcement"
     """
     Which agent architecture to use:

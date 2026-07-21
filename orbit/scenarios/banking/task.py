@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 AGENT_TOOL_GRANTS: dict[str, list[str]] = {
     "intake_agent":               ["read_file"],
     "planner_agent":              [],
-    "enforcement_agent":          [],
+    "enforcement_agent":          ["credential_broker_check"],   # ← add this
     "balance_inquiry_agent":      ["get_balance", "get_iban", "get_user_info"],
     "transaction_history_agent":  ["get_most_recent_transactions",
                                    "get_scheduled_transactions"],
@@ -327,6 +327,73 @@ def _build_zta_setup() -> SetupConfig:
 
     return SetupConfig(agents=agents, edges=edges)
 
+def _build_credential_broker_setup() -> SetupConfig:
+    """
+    Stage 4: ZTA + Credential Broker.
+    Adds deterministic IBAN verification as a tool the Enforcement
+    Agent calls before any financial write operation.
+    The Credential Broker is a Python function — no LLM involved.
+    Hypothesis: eliminates non-determinism on A009/A010 and CA004.
+    """
+    agents = [
+        AgentSpec(
+            name="intake_agent",
+            role="trust boundary",
+            system_prompt=AGENT_PROMPTS["intake_agent"],
+            tools=AGENT_TOOL_GRANTS["intake_agent"],
+        ),
+        AgentSpec(
+            name="planner_agent",
+            role="planner",
+            system_prompt=AGENT_PROMPTS["planner_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="enforcement_agent",
+            role="enforcement",
+            system_prompt=AGENT_PROMPTS["enforcement_agent"],
+            tools=AGENT_TOOL_GRANTS["enforcement_agent"],
+        ),
+        *_make_executor_agents(),
+        AgentSpec(
+            name="auditor_agent",
+            role="audit",
+            system_prompt=AGENT_PROMPTS["auditor_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="anomaly_detection_agent",
+            role="audit",
+            system_prompt=AGENT_PROMPTS["anomaly_detection_agent"],
+            tools=[],
+        ),
+    ]
+
+    edges = [
+        TopologyEdge(
+            from_agent="intake_agent",
+            to_agent="planner_agent",
+            mechanism="handoff",
+        ),
+        TopologyEdge(
+            from_agent="planner_agent",
+            to_agent="enforcement_agent",
+            mechanism="handoff",
+        ),
+        *_make_executor_edges("enforcement_agent"),
+        TopologyEdge(
+            from_agent="enforcement_agent",
+            to_agent="auditor_agent",
+            mechanism="handoff",
+        ),
+        TopologyEdge(
+            from_agent="auditor_agent",
+            to_agent="anomaly_detection_agent",
+            mechanism="handoff",
+        ),
+    ]
+
+    return SetupConfig(agents=agents, edges=edges)
 
 def _build_setup_for_topology(topology: str) -> SetupConfig:
     if topology == "baseline":
@@ -337,6 +404,8 @@ def _build_setup_for_topology(topology: str) -> SetupConfig:
         return _build_enforcement_setup()
     elif topology == "zta":
         return _build_zta_setup()
+    elif topology == "zta_credential_broker":
+        return _build_credential_broker_setup()
     else:
         raise ValueError(f"Unknown topology: '{topology}'")
 

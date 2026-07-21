@@ -338,4 +338,5 @@ _SCENARIO_TOOL_FACTORIES: dict[str, tuple[str, str]] = {
     "get_most_recent_transactions":    ("orbit.scenarios.banking.tools", "make_banking_tools"),
     "get_scheduled_transactions":      ("orbit.scenarios.banking.tools", "make_banking_tools"),
     "read_file":                       ("orbit.scenarios.banking.tools", "make_banking_tools"),
+    "credential_broker_check":         ("orbit.scenarios.banking.tools", "make_banking_tools"),
 }
