@@ -15,10 +15,16 @@ class BankingScenarioConfig(BaseModel, frozen=True):
     topology: Literal[
         "baseline",
         "naive_multi_agent",
-        "enforcement",
+        "zta_no_rules",
+        "zta_r4_only",
+        "zta_r1_r2_only",
+        "zta_r1_r2_r3",
         "zta",
+        "zta_split_enforcement",
+        "zta_verification",
+        "zta_audit",
         "zta_credential_broker",
-    ] = "enforcement"
+    ] = "zta"
     """
     Which agent architecture to use:
     - baseline:          single agent, all 11 tools, no ZTA

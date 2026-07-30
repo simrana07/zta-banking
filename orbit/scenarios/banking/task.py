@@ -63,6 +63,14 @@ AGENT_TOOL_GRANTS: dict[str, list[str]] = {
                                    "update_scheduled_transaction"],
     "auditor_agent":              [],
     "anomaly_detection_agent":    [],
+
+    "enforcement_no_rules":      [],
+    "enforcement_r4_only":       [],
+    "enforcement_r1_r2_only":    [],
+    "enforcement_r1_r2_r3":      [],
+    "policy_engine":             [],
+    "enforcement_agent_split":   [],
+    "verification_agent":        [],
 }
 
 
@@ -253,6 +261,162 @@ def _build_enforcement_setup() -> SetupConfig:
 
     return SetupConfig(agents=agents, edges=edges)
 
+def _build_ablation_setup(enforcement_prompt_key: str) -> SetupConfig:
+    """
+    Rule ablation — same topology as ZTA but with a different
+    enforcement prompt. Used for all rule ablation conditions.
+    """
+    agents = [
+        AgentSpec(
+            name="intake_agent",
+            role="trust boundary",
+            system_prompt=AGENT_PROMPTS["intake_agent"],
+            tools=AGENT_TOOL_GRANTS["intake_agent"],
+        ),
+        AgentSpec(
+            name="planner_agent",
+            role="planner",
+            system_prompt=AGENT_PROMPTS["planner_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="enforcement_agent",
+            role="enforcement",
+            system_prompt=AGENT_PROMPTS[enforcement_prompt_key],
+            tools=[],
+        ),
+        *_make_executor_agents(),
+    ]
+
+    edges = [
+        TopologyEdge(
+            from_agent="intake_agent",
+            to_agent="planner_agent",
+            mechanism="handoff",
+        ),
+        TopologyEdge(
+            from_agent="planner_agent",
+            to_agent="enforcement_agent",
+            mechanism="handoff",
+        ),
+        *_make_executor_edges("enforcement_agent"),
+    ]
+
+    return SetupConfig(agents=agents, edges=edges)
+
+
+def _build_split_enforcement_setup() -> SetupConfig:
+    """
+    Agent split — Policy Engine + Enforcement Agent as separate agents.
+    Policy Engine outputs PERMIT/DENY.
+    Enforcement Agent routes or blocks based on that decision.
+    Tests whether separating policy evaluation from routing helps.
+    """
+    agents = [
+        AgentSpec(
+            name="intake_agent",
+            role="trust boundary",
+            system_prompt=AGENT_PROMPTS["intake_agent"],
+            tools=AGENT_TOOL_GRANTS["intake_agent"],
+        ),
+        AgentSpec(
+            name="planner_agent",
+            role="planner",
+            system_prompt=AGENT_PROMPTS["planner_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="policy_engine",
+            role="policy",
+            system_prompt=AGENT_PROMPTS["policy_engine"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="enforcement_agent_split",
+            role="enforcement",
+            system_prompt=AGENT_PROMPTS["enforcement_agent_split"],
+            tools=[],
+        ),
+        *_make_executor_agents(),
+    ]
+
+    edges = [
+        TopologyEdge(
+            from_agent="intake_agent",
+            to_agent="planner_agent",
+            mechanism="handoff",
+        ),
+        TopologyEdge(
+            from_agent="planner_agent",
+            to_agent="policy_engine",
+            mechanism="handoff",
+        ),
+        TopologyEdge(
+            from_agent="policy_engine",
+            to_agent="enforcement_agent_split",
+            mechanism="handoff",
+        ),
+        *_make_executor_edges("enforcement_agent_split"),
+    ]
+
+    return SetupConfig(agents=agents, edges=edges)
+
+
+def _build_verification_setup() -> SetupConfig:
+    """
+    ZTA + Verification Agent.
+    Adds a final pre-execution check between Enforcement and Executors.
+    Verification Agent checks the instruction matches the original
+    user request before any tool executes.
+    """
+    agents = [
+        AgentSpec(
+            name="intake_agent",
+            role="trust boundary",
+            system_prompt=AGENT_PROMPTS["intake_agent"],
+            tools=AGENT_TOOL_GRANTS["intake_agent"],
+        ),
+        AgentSpec(
+            name="planner_agent",
+            role="planner",
+            system_prompt=AGENT_PROMPTS["planner_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="enforcement_agent",
+            role="enforcement",
+            system_prompt=AGENT_PROMPTS["enforcement_agent"],
+            tools=[],
+        ),
+        AgentSpec(
+            name="verification_agent",
+            role="verification",
+            system_prompt=AGENT_PROMPTS["verification_agent"],
+            tools=[],
+        ),
+        *_make_executor_agents(),
+    ]
+
+    edges = [
+        TopologyEdge(
+            from_agent="intake_agent",
+            to_agent="planner_agent",
+            mechanism="handoff",
+        ),
+        TopologyEdge(
+            from_agent="planner_agent",
+            to_agent="enforcement_agent",
+            mechanism="handoff",
+        ),
+        TopologyEdge(
+            from_agent="enforcement_agent",
+            to_agent="verification_agent",
+            mechanism="handoff",
+        ),
+        *_make_executor_edges("verification_agent"),
+    ]
+
+    return SetupConfig(agents=agents, edges=edges)
 
 def _build_zta_setup() -> SetupConfig:
     """
@@ -400,9 +564,21 @@ def _build_setup_for_topology(topology: str) -> SetupConfig:
         return _build_baseline_setup()
     elif topology == "naive_multi_agent":
         return _build_naive_setup()
-    elif topology == "enforcement":
-        return _build_enforcement_setup()
+    elif topology == "zta_no_rules":
+        return _build_ablation_setup("enforcement_no_rules")
+    elif topology == "zta_r4_only":
+        return _build_ablation_setup("enforcement_r4_only")
+    elif topology == "zta_r1_r2_only":
+        return _build_ablation_setup("enforcement_r1_r2_only")
+    elif topology == "zta_r1_r2_r3":
+        return _build_ablation_setup("enforcement_r1_r2_r3")
     elif topology == "zta":
+        return _build_enforcement_setup()
+    elif topology == "zta_split_enforcement":
+        return _build_split_enforcement_setup()
+    elif topology == "zta_verification":
+        return _build_verification_setup()
+    elif topology == "zta_audit":
         return _build_zta_setup()
     elif topology == "zta_credential_broker":
         return _build_credential_broker_setup()
