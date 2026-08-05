@@ -22,6 +22,7 @@ class BankingScenarioConfig(BaseModel, frozen=True):
         "zta",
         "zta_split_enforcement",
         "zta_verification",
+        "zta_verification_standard",
         "zta_audit",
         "zta_credential_broker",
     ] = "zta"
