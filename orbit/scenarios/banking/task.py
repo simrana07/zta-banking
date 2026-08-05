@@ -216,12 +216,11 @@ def _build_naive_setup() -> SetupConfig:
     return SetupConfig(agents=agents, edges=edges)
 
 
-def _build_enforcement_setup() -> SetupConfig:
+def _build_split_enforcement_setup() -> SetupConfig:
     """
-    Stage 2: Naive multi-agent + Enforcement Agent.
-    No safety logic in Intake Agent prompt.
-    Enforcement Agent sits between Planner and Executors with policy rules.
-    Expected: lower ASR than naive.
+    Agent split — same topology as ZTA but Enforcement Agent prompt
+    explicitly separates policy evaluation from routing into two steps.
+    The split is conceptual not structural to avoid handoff chain issues.
     """
     agents = [
         AgentSpec(
@@ -239,7 +238,7 @@ def _build_enforcement_setup() -> SetupConfig:
         AgentSpec(
             name="enforcement_agent",
             role="enforcement",
-            system_prompt=AGENT_PROMPTS["enforcement_agent"],
+            system_prompt=AGENT_PROMPTS["enforcement_agent_split"],
             tools=[],
         ),
         *_make_executor_agents(),
